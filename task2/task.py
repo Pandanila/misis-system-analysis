@@ -3,114 +3,105 @@ from math import e, log2
 from collections import defaultdict
 
 
-def dfs(graph, start, seen=None, path=None):
-    if seen is None:
-        seen = []
-    if path is None:
-        path = [start]
+def dfs(graph, edge, seen=None, path=None):
+    if seen is None: seen = []
+    if path is None: path = [edge]
+    
+    seen.append(edge)
+    
+    paths = []
+    for e in graph[edge]:
+        if e not in seen:
+            t_path = path + [e]
+            paths.append(tuple(t_path))
+            paths.extend(dfs(graph, e, seen[:], t_path))
+    
+    return paths
 
-    seen.append(start)
-    all_paths = []
-
-    for nxt in graph[start]:
-        if nxt not in seen:
-            new_path = path + [nxt]
-            all_paths.append(tuple(new_path))
-            all_paths.extend(dfs(graph, nxt, seen[:], new_path))
-
-    return all_paths
-
-
-def task1(text: str) -> tuple[list[list[bool]], list[list[bool]], list[list[bool]], list[list[bool]], list[list[bool]]]:
-    pairs = [chunk.split(",") for chunk in text.split("\n")]
-
-    graph = defaultdict(list)
-    for a, b in pairs:
-        graph[a].append(b)
-
-    vertices = []
-    for a, b in pairs:
-        if a not in vertices:
-            vertices.append(a)
-        if b not in vertices:
-            vertices.append(b)
-
-    idx = {v: i for i, v in enumerate(vertices)}
-    n = len(vertices)
-
-    r1 = np.zeros((n, n), bool)
-    for parent in graph:
-        p_index = idx[parent]
-        for child in graph[parent]:
-            r1[p_index][idx[child]] = True
+def task1(s: str) -> tuple[list[list[bool]], list[list[bool]], list[list[bool]], list[list[bool]], list[list[bool]]]:
+    pairs = [item.split(',') for item in s.split('\n')]
+    
+    graph_dict = defaultdict(list)
+    for (f, s) in pairs:
+        graph_dict[f].append(s)
+        
+    vertexes = []     
+    for item in pairs:
+        if item[0] not in vertexes:
+            vertexes.append(item[0])
+        if item[1] not in vertexes:
+            vertexes.append(item[1])
+            
+    index = {v: i for i, v in enumerate(vertexes)}
+    
+    n = len(vertexes)
+    
+    r1 = np.zeros((n,n),bool) 
+    
+    for key in graph_dict:
+        f_idx = index[key]
+        for item in graph_dict[key]:
+            r1[f_idx][index[item]] = 1
 
     r2 = r1.T
 
-    r3 = np.zeros((n, n), bool)
-    A = np.dot(r1, r1)
+    r3 = np.zeros((n,n),bool)
+    A = np.dot(r1,r1)
+    
+    max_path_len = max(len(p) for p in dfs(graph_dict, pairs[0][0]))
 
-    max_path_len = max(len(p) for p in dfs(graph, pairs[0][0]))
-
-    for _ in range(max_path_len - 2):
-        r3[np.logical_or(r3, A)] = True
-        A = np.dot(A, r1)
+    for i in range(max_path_len - 2):
+        r3[np.logical_or(r3,A)] = 1
+        A = np.dot(A,r1)
 
     r4 = r3.T
 
-    r5 = np.zeros((n, n), bool)
-    for boss in graph:
-        subs = graph[boss]
-        m = len(subs)
-        if m > 1:
-            for i in range(m):
-                a_idx = idx[subs[i]]
-                for sub2 in subs[i + 1 :]:
-                    b_idx = idx[sub2]
-                    r5[a_idx][b_idx] = True
+    r5 = np.zeros((n,n),bool)
+    
+    for edge in graph_dict:
+        edges = graph_dict[edge] 
+        len_edges = len(edges)
+        if len_edges > 1:
+            for i in range(len_edges):
+                f_idx = index[edges[i]]
+                for s_edge in edges[i+1:]:
+                    s_idx = index[s_edge]
+                    r5[f_idx][s_idx] = 1           
+        
+    r5[np.logical_or(r5,r5.T)] = 1 
+    ans = (r1.tolist(), r2.tolist(), r3.tolist(), r4.tolist(), r5.tolist())
 
-    r5[np.logical_or(r5, r5.T)] = True
+    return ans
 
-    return (
-        r1.tolist(),
-        r2.tolist(),
-        r3.tolist(),
-        r4.tolist(),
-        r5.tolist(),
-    )
-
-
-def entropy(x: float) -> float:
-    if x != 0:
-        return -x * log2(x)
+def entropy(num: float) -> float:
+    if num != 0:
+        H = -num*log2(num)
+        return H
     return 0.0
 
-
-def main(text: str) -> tuple[float, float]:
-    rels = task1(text)
+def main(s: str) -> tuple[float, float]:
+    v = task1(s)
     k = 5
-    n = len(rels[0])
+    n = len(v[0])  
+      
+    ans = []
+    out_connections = np.zeros((n,k), int)
 
-    out_connections = np.zeros((n, k), int)
-    for rel_idx, rel_matrix in enumerate(rels):
+    for idx, item in enumerate(v):
         for i in range(n):
-            out_connections[i][rel_idx] = sum(rel_matrix[i])
-
-    H_sum = 0.0
-    for row in out_connections:
-        row_sum = sum(row)
-        for j in range(k):
-            H_sum += entropy(float(row[j] / row_sum))
-
-    C = -(1 / e) * log2(1 / e)
+            out_connections[i][idx] = sum(item[i])
+        
+    H_sum = sum(entropy(float(row[i]/sum(row))) for i in range(k) for row in out_connections) 
+        
+    C = -1/e*log2(1/e)
     H_ref = C * n * k
-
+    
     h = H_sum / H_ref
-    result = (round(H_sum, 1), round(h, 1))
+
+    ans = (round(H_sum,1), round(h,1))
     print(H_ref)
-    return result
-
-
+    return ans
+    
 csv_string = "1,2\n1,3\n3,4\n3,5"
 csv_string1 = "1,2\n2,3\n2,4\n4,5\n4,6"
-
 print(main(csv_string1))
